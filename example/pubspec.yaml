@@ -1,0 +1,13 @@
+name: jaspr_storybook_example
+description: A self-contained example of the Jaspr Storybook renderer.
+publish_to: none
+
+environment:
+  sdk: '>=3.10.1 <4.0.0'
+
+dependencies:
+  jaspr: '>=0.23.3 <0.24.0'
+  jaspr_storybook: ^1.0.0
+
+dev_dependencies:
+  lints: ^6.1.0
