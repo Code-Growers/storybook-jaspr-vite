@@ -1,7 +1,16 @@
 import { execFile } from "node:child_process";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { access, mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  dirname,
+  isAbsolute,
+  join,
+  posix,
+  relative,
+  resolve,
+  sep,
+} from "node:path";
 import { promisify } from "node:util";
 import type { Plugin, ViteDevServer } from "vite";
 import type { FrameworkOptions } from "./types.js";
@@ -10,7 +19,17 @@ import { readSourceRegions } from "./sources.js";
 const exec = promisify(execFile);
 const virtualId = "virtual:jaspr-storybook-runtime";
 const resolvedId = `\0${virtualId}`;
-const devUrl = "/@jaspr-storybook/preview.js";
+const previewName = "preview.js";
+const previewOutput = /^preview\.js(?:_\d+\.part\.js)?$/;
+const devPrefix = "/@jaspr-storybook";
+const devUrl = `${devPrefix}/${previewName}`;
+
+export type CompiledPreview = ReadonlyMap<string, Buffer>;
+
+export interface PreviewAssets {
+  entry: string;
+  files: { fileName: string; source: Buffer }[];
+}
 
 async function packageConfig(entrypoint: string): Promise<string> {
   let directory = dirname(entrypoint);
@@ -32,11 +51,11 @@ export async function compilePreview(
   entrypoint: string,
   dartExecutable: string,
   production: boolean,
-): Promise<Buffer> {
+): Promise<CompiledPreview> {
   const packages = await packageConfig(entrypoint);
   const scratch = await mkdtemp(join(tmpdir(), "jaspr-storybook-"));
   try {
-    const output = join(scratch, "preview.js");
+    const output = join(scratch, previewName);
     await exec(
       dartExecutable,
       [
@@ -51,7 +70,16 @@ export async function compilePreview(
       ],
       { cwd: dirname(entrypoint), maxBuffer: 8 * 1024 * 1024 },
     );
-    return await readFile(output);
+    const names = (await readdir(scratch))
+      .filter((name) => previewOutput.test(name))
+      .sort();
+    return new Map(
+      await Promise.all(
+        names.map(
+          async (name) => [name, await readFile(join(scratch, name))] as const,
+        ),
+      ),
+    );
   } catch (error) {
     const output = error as {
       stdout?: string;
@@ -65,6 +93,26 @@ export async function compilePreview(
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
+}
+
+export function previewAssets(
+  preview: CompiledPreview,
+  assetsDir: string,
+): PreviewAssets {
+  const hash = createHash("sha256");
+  for (const [name, source] of preview)
+    hash.update(`${name}\0${source.length}\0`).update(source);
+  const directory = posix.join(
+    assetsDir,
+    `jaspr-preview-${hash.digest("hex").slice(0, 12)}`,
+  );
+  return {
+    entry: posix.join(directory, previewName),
+    files: [...preview].map(([name, source]) => ({
+      fileName: posix.join(directory, name),
+      source,
+    })),
+  };
 }
 
 export function dartPreviewPlugin(
@@ -82,7 +130,8 @@ export function dartPreviewPlugin(
     ...(options.watchPaths ?? []).map((path) => resolve(configDir, path)),
   ];
   let production = false;
-  let bundle: Buffer;
+  let assetsDir = "assets";
+  let bundle: CompiledPreview = new Map();
   let sources: Record<string, string> = {};
   let queued = Promise.resolve();
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -112,6 +161,7 @@ export function dartPreviewPlugin(
     name: "jaspr-storybook",
     configResolved(config) {
       production = config.command === "build";
+      assetsDir = config.build.assetsDir;
     },
     async buildStart() {
       sources = await readSourceRegions(sourceFiles);
@@ -129,22 +179,26 @@ export function dartPreviewPlugin(
       const sourceExport = `export const dartSources = ${JSON.stringify(sources)};`;
       if (!production)
         return `${sourceExport} export const bundleUrl = ${JSON.stringify(devUrl)};`;
-      const reference = this.emitFile({
-        type: "asset",
-        name: "jaspr-preview.js",
-        source: bundle,
-      });
+      const assets = previewAssets(bundle, assetsDir);
+      let reference = "";
+      for (const file of assets.files) {
+        const emitted = this.emitFile({ type: "asset", ...file });
+        if (file.fileName === assets.entry) reference = emitted;
+      }
       return `${sourceExport} export const bundleUrl = import.meta.ROLLUP_FILE_URL_${reference};`;
     },
     configureServer(devServer) {
       server = devServer;
-      server.middlewares.use(devUrl, (_request, response) => {
+      server.middlewares.use(devPrefix, (request, response, next) => {
+        const name = new URL(request.url ?? "/", "http://localhost").pathname;
+        const source = bundle.get(name.slice(1));
+        if (!source) return next();
         response.setHeader(
           "Content-Type",
           "application/javascript; charset=utf-8",
         );
         response.setHeader("Cache-Control", "no-store");
-        response.end(bundle);
+        response.end(source);
       });
       server.watcher.add(watchPaths);
       const onChange = (path: string) => {

@@ -2,6 +2,8 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/jaspr.dart';
 import 'package:jaspr_storybook/jaspr_storybook.dart';
 
+import 'deferred_greeting.dart' deferred as greeting;
+
 void main() {
   registerStorybook({
     // #docregion button
@@ -28,6 +30,9 @@ void main() {
     // #docregion counter
     'counter': (story) => _Counter(label: story.arg<String>('label')),
     // #enddocregion counter
+    // #docregion deferred
+    'deferred': (story) => _Deferred(name: story.arg<String>('name')),
+    // #enddocregion deferred
     'error': (story) => throw StateError('Example build failure'),
   });
 }
@@ -48,4 +53,37 @@ class _CounterState extends State<_Counter> {
     onClick: () => setState(() => count++),
     [.text('${component.label}: $count')],
   );
+}
+
+class _Deferred extends StatefulComponent {
+  const _Deferred({required this.name});
+  final String name;
+
+  @override
+  State<_Deferred> createState() => _DeferredState();
+}
+
+class _DeferredState extends State<_Deferred> {
+  Object? failure;
+  bool loaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    greeting.loadLibrary().then(
+      (_) {
+        if (mounted) setState(() => loaded = true);
+      },
+      onError: (Object error) {
+        if (mounted) setState(() => failure = error);
+      },
+    );
+  }
+
+  @override
+  Component build(BuildContext context) => switch ((loaded, failure)) {
+    (true, _) => greeting.deferredGreeting(component.name),
+    (_, final Object error) => p([.text('Could not load: $error')]),
+    _ => p([.text('Loading')]),
+  };
 }

@@ -1,6 +1,7 @@
 # Storybook for Jaspr
 
-Two MIT-licensed packages provide the integration, both at version `1.0.0`:
+Two MIT-licensed packages provide the integration. The npm framework is at
+`1.0.1` and works with the `1.x` Dart runtime:
 
 | Registry | Package | Source |
 | --- | --- | --- |
@@ -88,6 +89,9 @@ No remote Dart or Jaspr server is required to view a built Storybook.
   Builder errors reject rendering so Storybook can show its error UI.
 - Play functions run after the Dart mount/update promise completes. They are
   authored in TypeScript against the preview's regular DOM.
+- Deferred imports work. The parts dart2js emits are served next to the
+  preview during development and emitted with it into one content-hashed
+  asset directory in static builds.
 - Changes to Dart files under the entrypoint directory or `watchPaths` trigger
   recompilation and a full preview reload. Dart state resets on source changes;
   this is not Jaspr hot reload. Compilation failures show the Vite error overlay.
@@ -138,8 +142,8 @@ explicit source override, the code panel indicates that Dart source is unconfigu
 ## Examples and development
 
 Each repository includes a small `example/` with a button, a controlled switch
-and stateful counters. No backend or application-specific assets are needed.
-The example configuration lives in `example/storybook/` so pub.dev includes it;
+and stateful counters. The npm example also loads a deferred library. No
+backend or application-specific assets are needed. The example configuration lives in `example/storybook/` so pub.dev includes it;
 consumer applications can use the conventional `.storybook/` directory.
 
 In the Dart runtime repository:

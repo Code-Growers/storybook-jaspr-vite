@@ -1,6 +1,6 @@
 {
   "name": "@codegrowers/storybook-jaspr-vite",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A native Storybook renderer and Vite framework for Jaspr components written in Dart.",
   "type": "module",
   "license": "MIT",

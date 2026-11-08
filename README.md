@@ -6,7 +6,7 @@ Controls, record Actions and run TypeScript play functions against the DOM.
 
 MIT licensed. Requires the companion
 [`jaspr_storybook`](https://pub.dev/packages/jaspr_storybook) Dart runtime.
-Both packages are released at `1.0.0`.
+This framework is released at `1.0.1` and works with the `1.x` runtime.
 
 ```sh
 bun add --dev @codegrowers/storybook-jaspr-vite@^1.0.0 storybook@10.6.5 vite@8.3.5 @storybook/addon-docs@10.6.5
