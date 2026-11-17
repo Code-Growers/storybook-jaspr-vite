@@ -33,6 +33,7 @@ void main() {
     // #docregion deferred
     'deferred': (story) => _Deferred(name: story.arg<String>('name')),
     // #enddocregion deferred
+    'nested-error': (story) => const NestedFailure(),
     'error': (story) => throw StateError('Example build failure'),
   });
 }
@@ -86,4 +87,12 @@ class _DeferredState extends State<_Deferred> {
     (_, final Object error) => p([.text('Could not load: $error')]),
     _ => p([.text('Loading')]),
   };
+}
+
+class NestedFailure extends StatelessComponent {
+  const NestedFailure();
+
+  @override
+  Component build(BuildContext context) =>
+      throw StateError('Nested regression failure');
 }

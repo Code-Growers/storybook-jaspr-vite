@@ -5,6 +5,48 @@ import { dirname } from "node:path";
 import { mergeConfig, searchForWorkspaceRoot } from "vite";
 import { dartPreviewPlugin } from "./vite-plugin.js";
 import type { FrameworkOptions } from "./types.js";
+import { storyDocsProvider } from "./story-docs.js";
+import type {
+  Options,
+  StoryDocsProviderPreset,
+} from "storybook/internal/types";
+import { importParsers } from "./import-parsers.js";
+
+async function metadataOptions(options: Options) {
+  const framework = await options.presets.apply<{ options: FrameworkOptions }>(
+    "framework",
+  );
+  return {
+    ...framework.options,
+    configDir: options.configDir,
+    workingDir: process.cwd(),
+  };
+}
+
+export const features: PresetProperty<"features"> = (features) => ({
+  ...features,
+  docgenServer: true,
+});
+
+export const experimental_docgenProvider: PresetProperty<
+  "experimental_docgenProvider"
+> = async (providers = [], options) => [
+  ...providers,
+  {
+    moduleSpecifier: fileURLToPath(import.meta.resolve("./docgen.js")),
+    options: await metadataOptions(options),
+  },
+];
+
+export const experimental_storyDocsProvider: StoryDocsProviderPreset = async (
+  next,
+  options,
+) => storyDocsProvider(next, await metadataOptions(options));
+
+export const experimental_importParsers = async (
+  parsers: ReturnType<typeof importParsers> = [],
+  options: Options,
+) => [...parsers, ...importParsers(await metadataOptions(options))];
 
 export const core: PresetProperty<"core"> = {
   builder: import.meta.resolve("@storybook/builder-vite"),

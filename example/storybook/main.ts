@@ -14,7 +14,11 @@ const config: StorybookConfig = {
     },
   },
   stories: ["../stories/**/*.stories.ts"],
-  addons: [dirname(require.resolve("@storybook/addon-docs/package.json"))],
+  addons: [
+    dirname(require.resolve("@storybook/addon-docs/package.json")),
+    dirname(require.resolve("@storybook/addon-vitest/package.json")),
+    dirname(require.resolve("@storybook/addon-a11y/package.json")),
+  ],
 };
 
 export default config;

@@ -11,6 +11,7 @@ import "./dart-highlighting.js";
 import { checkRecord, type JasprRuntime } from "./protocol.js";
 import { loadRuntime } from "./runtime.js";
 import type { JasprRenderer } from "./types.js";
+import { observeBuildErrors } from "./build-errors.js";
 
 export const parameters = {
   renderer: "jaspr",
@@ -32,6 +33,9 @@ interface Session {
   host: HTMLElement;
   disposed: boolean;
   ready: Promise<unknown>;
+  failure?: Error;
+  args: Record<string, unknown>;
+  globals: Record<string, unknown>;
   dispose(): void;
 }
 
@@ -72,6 +76,8 @@ export async function renderToCanvas(
     previous.component === story.component &&
     !context.forceRemount
   ) {
+    previous.args = args;
+    previous.globals = globals;
     previous.ready = previous.ready
       .catch(() => {})
       .then(() => {
@@ -79,6 +85,7 @@ export async function renderToCanvas(
           return runtime.update(previous.host.id, args, globals);
       });
     await previous.ready;
+    if (previous.failure) throw previous.failure;
     if (!previous.disposed) emitSource();
     context.showMain();
     return previous.dispose;
@@ -88,15 +95,20 @@ export async function renderToCanvas(
   const host = document.createElement("div");
   host.id = `jaspr-storybook-${++nextInstance}`;
   canvas.appendChild(host);
+  let rendering = true;
+  let stopObserving = () => {};
   const session: Session = {
     component: story.component,
     runtime,
     host,
     disposed: false,
     ready: Promise.resolve(),
+    args,
+    globals,
     dispose() {
       if (session.disposed) return;
       session.disposed = true;
+      stopObserving();
       try {
         runtime.unmount(host.id);
       } finally {
@@ -108,6 +120,10 @@ export async function renderToCanvas(
     },
   };
   sessions.set(canvas, session);
+  stopObserving = observeBuildErrors((error) => {
+    session.failure = error;
+    if (!rendering) context.showException(error);
+  });
   session.ready = runtime.mount(
     host.id,
     story.component,
@@ -120,6 +136,7 @@ export async function renderToCanvas(
         const failure = checkRecord(payload, "error");
         const error = new Error(String(failure.message));
         if (typeof failure.stack === "string") error.stack = failure.stack;
+        session.failure = error;
         context.showException(error);
         return;
       }
@@ -129,15 +146,30 @@ export async function renderToCanvas(
           throw new Error("A Jaspr action must have a name.");
         action(event.name)(event.value);
       } else if (type === "args") {
+        const patch = checkRecord(payload, "updatedArgs");
+        session.args = { ...session.args, ...patch };
+        // Portable stories have no manager listening to UPDATE_STORY_ARGS.
+        // Apply controlled input locally as well as publishing it to Controls.
+        const updatedArgs = session.args;
+        session.ready = session.ready.then(async () => {
+          if (!session.disposed)
+            await runtime.update(host.id, updatedArgs, session.globals);
+          if (session.failure) throw session.failure;
+        });
+        void session.ready.catch((error: unknown) =>
+          context.showException(error as Error),
+        );
         addons.getChannel().emit(UPDATE_STORY_ARGS, {
           storyId: context.storyContext.id,
-          updatedArgs: checkRecord(payload, "updatedArgs"),
+          updatedArgs: patch,
         });
       }
     },
   );
   try {
     await session.ready;
+    if (session.failure) throw session.failure;
+    rendering = false;
     if (!session.disposed) {
       emitSource();
       context.showMain();

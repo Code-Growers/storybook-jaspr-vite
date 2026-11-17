@@ -3,7 +3,7 @@ import type {
   ComponentAnnotations,
   StoryAnnotations,
   WebRenderer,
-  StorybookConfigRaw,
+  StorybookConfig as BaseStorybookConfig,
 } from "storybook/internal/types";
 import type { StorybookConfigVite } from "@storybook/builder-vite";
 
@@ -35,9 +35,11 @@ export interface FrameworkOptions {
   watchPaths?: string[];
   /** Dart files with #docregion markers keyed by registered component name. */
   sourceFiles?: string[];
+  /** Generated Jaspr component metadata JSON, relative to the config directory. */
+  componentManifest?: string;
 }
 
-export type StorybookConfig = Omit<StorybookConfigRaw, "framework"> &
+export type StorybookConfig = Omit<BaseStorybookConfig, "framework"> &
   StorybookConfigVite & {
     framework: {
       name: string;

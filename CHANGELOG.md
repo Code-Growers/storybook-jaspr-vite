@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-beta.0
+
+- Require Storybook 11.0.0-beta.3; retain CSF 3 authoring and the v1 Dart bridge.
+- Provide headless Dart component and story docs through Storybook provider hooks.
+- Trace Dart imports, exports, parts, conditional and deferred dependencies for native affected-story tools.
+- Support controlled argument updates in portable Vitest stories and surface nested Jaspr build failures.
+- Fix managerHead configuration typing, package a Jaspr workflow skill, and verify native CLI component/a11y tests including a deliberate failing render.
+
 ## 1.0.1
 
 - Keep the parts dart2js emits for deferred imports. Development serves them

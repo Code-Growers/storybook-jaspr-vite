@@ -6,11 +6,12 @@ Controls, record Actions and run TypeScript play functions against the DOM.
 
 MIT licensed. Requires the companion
 [`jaspr_storybook`](https://pub.dev/packages/jaspr_storybook) Dart runtime.
-This framework is released at `1.0.1` and works with the `1.x` runtime.
+Beta `2.0.0-beta.0` supports Storybook `11.0.0-beta.3` and
+`jaspr_storybook 1.1.0-beta.1` on Jaspr 0.24.
 
 ```sh
-bun add --dev @codegrowers/storybook-jaspr-vite@^1.0.0 storybook@10.6.5 vite@8.3.5 @storybook/addon-docs@10.6.5
-dart pub add --dev jaspr_storybook:^1.0.0
+bun add --dev @codegrowers/storybook-jaspr-vite@2.0.0-beta.0 storybook@11.0.0-beta.3 vite@8.3.5 @storybook/addon-docs@11.0.0-beta.3
+dart pub add --dev jaspr_storybook:1.1.0-beta.1
 ```
 
 Register builders with `registerStorybook` in a Dart client entrypoint, configure
@@ -38,15 +39,22 @@ Docs can show actual Dart builders selected with `#docregion` markers, with Dart
 syntax highlighting. See [STORYBOOK.md](STORYBOOK.md) for Dart registration, CSF, controls, actions,
 watch options, styling, examples and release instructions.
 
-Tested with Jaspr 0.23.3 and 0.23.5, Storybook 10.6.5, Vite 8.3.5,
+Tested with Jaspr 0.24.0-beta.1, Storybook 11.0.0-beta.3, Vite 8.3.5,
 Bun 1.4.2 and Dart 3.13.5. The Dart SDK must be on `PATH`, or set
 `framework.options.dartExecutable`. Node execution has not been verified.
 
 Styles and assets belong to the consumer. Argument values must be compatible
 with JSON. This version previews client-side Jaspr components; it does not
-provide SSR/hydration testing, Wasm output, Dart constructor introspection or
-automatic Dart story discovery.
+provide SSR/hydration testing, Wasm output or automatic Dart story discovery.
+Optional generated metadata supplies resolved Dart constructor documentation.
 
 To develop: run `bun install`, `bun run build`, `bun run format:check`,
 `bun run lint`, `bun run typecheck` and `bun test`. Run `dart pub get` in
 `example/`, then `bun run build:example` and `bun run preview` from the root.
+
+## Headless agent workflow
+
+Storybook 11 CLI documentation, Dart dependency tracing, Vitest component tests
+and local review tools are supported by the native Jaspr providers. The package
+includes `skills/jaspr-storybook-workflow`. See [STORYBOOK.md](STORYBOOK.md)
+for metadata generation, browser setup, limitations and paired release checks.

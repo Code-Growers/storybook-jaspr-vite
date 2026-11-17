@@ -1,192 +1,140 @@
-# Storybook for Jaspr
+# Storybook 11 for Jaspr
 
-Two MIT-licensed packages provide the integration. The npm framework is at
-`1.0.1` and works with the `1.x` Dart runtime:
+The beta pair is `jaspr_storybook 1.1.0-beta.1` and
+`@codegrowers/storybook-jaspr-vite 2.0.0-beta.0`, tested with Storybook
+`11.0.0-beta.3`, Jaspr `0.24.0-beta.1`, Vite `8.3.5`, Bun `1.4.2`,
+TypeScript `6.0.3`, and Vitest `4.1.12`. Keep all Storybook packages on the same
+exact beta. The stable npm 1.x line supports Storybook 10; Dart 1.0.x supports
+Jaspr 0.23. Node execution has not been verified.
 
-| Registry | Package | Source |
-| --- | --- | --- |
-| pub.dev | [`jaspr_storybook`](https://pub.dev/packages/jaspr_storybook) | [Dart runtime](https://github.com/Code-Growers/jaspr_storybook) |
-| npm | [`@codegrowers/storybook-jaspr-vite`](https://www.npmjs.com/package/@codegrowers/storybook-jaspr-vite) | [Storybook framework](https://github.com/Code-Growers/storybook-jaspr-vite) |
-
-## Consumer setup
-
-Add `jaspr_storybook` to your Dart application's development
-dependencies and the matching npm framework plus Storybook/Vite to its JavaScript
-development dependencies. For example, using Bun:
+## Install
 
 ```sh
-dart pub add --dev jaspr_storybook:^1.0.0
-bun add --dev @codegrowers/storybook-jaspr-vite@^1.0.0 storybook@10.6.5 vite@8.3.5 @storybook/addon-docs@10.6.5
+dart pub add --dev jaspr_storybook:1.1.0-beta.1
+bun add --dev @codegrowers/storybook-jaspr-vite@2.0.0-beta.0 storybook@11.0.0-beta.3 @storybook/addon-docs@11.0.0-beta.3 vite@8.3.5
 ```
 
-The current tested targets are Jaspr 0.23.3 and 0.23.5, Storybook 10.6.5, Vite
-8.3.5, Bun 1.4.2 and Dart 3.13.5. The Jaspr constraint allows 0.23.x, but other patch versions
-still need compatibility verification before extending the advertised matrix.
-Node support has not been verified; the development and release scripts use Bun.
+Register client-side Dart builders with `registerStorybook`, and use their keys
+as `component` in TypeScript CSF 3 stories. Import `Meta`, `StoryObj` and
+`StorybookConfig` from the npm framework. The framework config requires
+`options.entrypoint`, relative to the Storybook config directory. Optional
+`sourceFiles` selects additional Dart snippet files, and `watchPaths` includes
+external Dart sources. Consumer CSS and fonts stay in the consumer project.
 
-Register components in a Dart client entrypoint as shown in README.md. Configure
-`.storybook/main.ts`:
+Wrap Dart examples in `// #docregion <builder-key>` and matching
+`// #enddocregion <builder-key>` markers. The renderer exposes these examples in
+Docs, the Code panel and the headless CLI. Story-specific
+`parameters.docs.source.code` takes precedence. Snippets show the fixture as
+written; they are not reconstructed from control values.
 
-```ts
-import type { StorybookConfig } from '@codegrowers/storybook-jaspr-vite';
-import { createRequire } from 'node:module';
-import { dirname } from 'node:path';
+## Headless documentation and change detection
 
-const require = createRequire(import.meta.url);
-
-export default {
-  framework: {
-    name: dirname(require.resolve('@codegrowers/storybook-jaspr-vite/package.json')),
-    options: {
-      entrypoint: '../lib/storybook.client.dart',
-      // Optional directories outside the entrypoint directory:
-      // watchPaths: ['../../shared_widgets/lib'],
-      // dartExecutable: '/path/to/dart',
-    },
-  },
-  stories: ['../stories/**/*.stories.ts'],
-  addons: [dirname(require.resolve('@storybook/addon-docs/package.json'))],
-} satisfies StorybookConfig;
+```sh
+bun run --bun storybook tools --no-attach docs list --withStoryIds true --json
+bun run --bun storybook tools --no-attach docs show --id <component-id>
+bun run --bun storybook tools --no-attach stories find-by-component --componentPaths '["lib/controls.dart"]' --json
 ```
 
-Write normal CSF stories, using the Dart registry key as `component`:
+Run from the Storybook project directory. For another config location, put
+`--config-dir <directory>` after `tools`, before `docs` or `stories`.
+The framework contributes Storybook 11 docgen, story-docs and import-parser
+providers. They do not compile or execute Dart to read documentation. The import
+parser maps CSF registration keys to Dart files and follows imports, exports,
+parts, conditional and deferred imports. Shared fixtures intentionally produce
+conservative affected sets. CSS, tokens and dynamically loaded assets may require
+explicit consumer selection.
 
-```ts
-import type { Meta, StoryObj } from '@codegrowers/storybook-jaspr-vite';
+For constructor documentation, create a metadata configuration:
 
-type Args = { label: string; disabled: boolean };
-export default {
-  title: 'Components/Button',
-  component: 'button',
-  tags: ['autodocs'],
-  args: { label: 'Save', disabled: false },
-  argTypes: {
-    label: { control: 'text' },
-    disabled: { control: 'boolean' },
-  },
-} satisfies Meta<Args>;
-
-export const Default: StoryObj<Args> = {};
-```
-
-Run `dart pub get`, then `bun --bun storybook dev` or `bun --bun storybook build`.
-The preset invokes the configured Dart SDK to compile the entrypoint. It serves
-the result during development and emits it as a local asset in static builds.
-No remote Dart or Jaspr server is required to view a built Storybook.
-
-## Features and boundaries
-
-- The renderer mounts actual Jaspr component trees directly into the Canvas.
-  It does not depend on the HTML renderer or embed a second iframe.
-- Controls and globals update the root while retaining descendant state. Dart
-  can update controlled arguments through `story.updateArgs`.
-- Actions cross the Dart/JavaScript boundary through a named event channel.
-- Optional `undefined` object properties are omitted; array entries become
-  `null`, following JSON conventions. Functions and opaque objects are rejected.
-- Inline Docs can mount multiple independent previews. Use `story.instanceId`
-  when assigning DOM ids.
-- Story teardown disposes the Jaspr tree and removes the renderer-owned DOM.
-  Builder errors reject rendering so Storybook can show its error UI.
-- Play functions run after the Dart mount/update promise completes. They are
-  authored in TypeScript against the preview's regular DOM.
-- Deferred imports work. The parts dart2js emits are served next to the
-  preview during development and emitted with it into one content-hashed
-  asset directory in static builds.
-- Changes to Dart files under the entrypoint directory or `watchPaths` trigger
-  recompilation and a full preview reload. Dart state resets on source changes;
-  this is not Jaspr hot reload. Compilation failures show the Vite error overlay.
-- Styling remains in the application. Import CSS in `.storybook/preview.ts`
-  and serve fonts/images with Storybook `staticDirs`. Jaspr-generated CSS or
-  code generation must be prepared with the application's normal tooling.
-- Dart constructor introspection, automatic Dart story discovery, server-only
-  components, SSR/hydration verification and Wasm output are outside this version.
-  Controls metadata is explicit. JSON-compatible arguments are required. To show
-  Dart source in Docs, supply `parameters.docs.source.code` and `language: 'dart'`.
-
-## Dart source in Docs
-
-The renderer shows real Dart source regions in Docs and the optional Code panel,
-with Dart syntax highlighting. In the Dart entrypoint or files listed in
-`framework.options.sourceFiles`, surround a builder or component expression with
-markers matching its registered component key:
-
-```dart
-// #docregion button
-Component buttonStory(StorybookContext story) => button(
-  disabled: story.arg<bool>('disabled'),
-  onClick: () => story.action('onClick'),
-  [.text(story.arg<String>('label'))],
-);
-// #enddocregion button
-```
-
-```ts
-options: {
-  entrypoint: '../lib/storybook.client.dart',
-  sourceFiles: ['../lib/component_stories.dart'],
+```json
+{
+  "schemaVersion": 1,
+  "root": "..",
+  "components": {
+    "button": {
+      "name": "AppButton",
+      "library": "lib/controls.dart",
+      "symbols": ["AppButton"],
+      "import": "import 'package:my_app/controls.dart';",
+      "description": "Primary action control",
+      "contract": "Use the shared button for application actions.",
+      "example": {"file": "lib/stories.dart", "region": "button"}
+    }
+  }
 }
 ```
 
-Paths are relative to the Storybook configuration directory. The entrypoint is
-always scanned. Source files are watched automatically. Each region has one
-unique name; nested, duplicate, empty or unclosed regions fail the build.
-Only marked code is embedded in the static build. Snippets show the Dart builder
-as written, including `story.arg` calls; changing controls does not rewrite Dart
-source. The TypeScript `play` function continues to run independently.
-
-For a hand-written example or a story-specific variant, use standard Storybook
-`parameters.docs.source.code` with `language: 'dart'`. `docs.source.transform`
-is also supported by the Docs source block. Without a matching region or an
-explicit source override, the code panel indicates that Dart source is unconfigured.
-
-## Examples and development
-
-Each repository includes a small `example/` with a button, a controlled switch
-and stateful counters. The npm example also loads a deferred library. No
-backend or application-specific assets are needed. The example configuration lives in `example/storybook/` so pub.dev includes it;
-consumer applications can use the conventional `.storybook/` directory.
-
-In the Dart runtime repository:
+Paths are relative to `root`, which is relative to the config file. Symbols must
+be exported from the specified library. Optional `example.supportRegions` includes
+supporting definitions before the main region. Generate with:
 
 ```sh
-dart pub get
-dart format .
-dart analyze
-dart test
-cd example
-dart pub get
-bun install
-bun run dev
+dart run jaspr_storybook:metadata --config .storybook/metadata.config.json --output .storybook/components.json
+# CI freshness check:
+dart run jaspr_storybook:metadata --config .storybook/metadata.config.json --output .storybook/components.json --check
 ```
 
-In the npm framework repository:
+Set `framework.options.componentManifest: './components.json'`. The extractor
+uses resolved Dart types, constructor defaults and documentation. It is a VM-only
+library (`package:jaspr_storybook/metadata.dart`); the browser runtime never imports
+analyzer. Story args remain explicit fixture controls, separate from constructor
+parameters. Regenerate after source changes. Manifest schema v1 belongs to this
+package; the translation to Storybook's experimental provider APIs is isolated
+inside the npm framework and tested against the pinned beta.
+
+## Tests and review
+
+Add the matching `@storybook/addon-vitest`, `@storybook/addon-a11y`, Vitest 4 and
+`@vitest/browser-playwright`. Configure a nested `test.projects` entry with
+`storybookTest({configDir: <absolute-directory>})` and browser mode. See the npm
+repository's `vitest.config.ts`; it uses an installed Chrome channel and does not
+download browsers. The example is verified using both Vitest and the native CLI.
 
 ```sh
-bun install
-bun run build
-bun run format:check
-bun run lint
-bun run typecheck
-bun test
-cd example
-dart pub get
-cd ..
-bun run build:example
-bun run preview
+bun run --bun storybook tools --no-attach test run --json
+bun run --bun storybook tools --port 6006 review create --help
 ```
 
-The Dart example uses the local runtime and the published npm framework. The
-npm example uses the local framework and the published Dart runtime. Changes
-to the shared browser protocol must be verified across both repositories.
+Inspect nonzero `totalTestCount`, component/a11y failure counts and unhandled
+errors. Failed story tests return a nonzero exit status. Preview URLs and review
+creation require a running Storybook dev server. Review creation replaces the
+active local review; use IDs returned by discovery tools.
 
-## Release
+Controlled Dart `updateArgs` updates work in portable tests as well as the
+manager. Mount/update promises settle before play functions. Nested Jaspr 0.24
+build failures are reported through its console-error path; the renderer observes
+that specific message and fails active previews conservatively, preserving the
+original console output and restoring its observer on teardown. Concurrent
+previews cannot attribute such errors to one instance because Jaspr exposes no
+instance-specific callback.
 
-Keep the paired package versions compatible. Run the checks above, review
-`dart pub publish --dry-run` in the Dart repository and `bun pm pack --dry-run`
-in the npm repository, and verify the examples in a browser.
+This is a client renderer. Source edits recompile Dart and reload the preview;
+there is no stateful hot reload, server-only rendering, or SSR/hydration testing.
+Component tests do not replace application authentication or backend tests.
 
-Publish the Dart runtime with `dart pub publish`, and the public scoped npm
-framework with `bun publish --access public`. The npm publish lifecycle builds
-the distribution and runs its checks. Registry credentials belong in the local
-authentication environment and must never be committed. Tag releases in both
-source repositories after successful publication.
+## Agent skills
+
+Both package archives contain `skills/jaspr-storybook-workflow/SKILL.md`.
+In Dart consumers install the version from the resolved package:
+
+```sh
+dart run skills@ get --package jaspr_storybook --agent codex --all
+```
+
+npm consumers can copy that skill directory from the installed package into their
+agent's project skill directory. The Dart repository owns the skill; synchronize
+its identical copy into the npm package for paired releases. Project-specific
+component selection, design tokens, localization and verification rules take
+precedence over generic examples. The integration uses Storybook's native CLI;
+no additional Storybook MCP server is required.
+
+## Release verification
+
+Run Dart format, analysis, tests and `dart pub publish --dry-run`. In the npm
+repository run format:check, lint, typecheck, test, test:integration and
+build:example, inspect `bun pm pack --dry-run`, and verify the example in a browser.
+The integration script checks headless source, transitive Dart dependencies,
+nonempty passing component/a11y tests and a deliberately failing nested build.
+Publish the Dart prerelease first, then `bun publish --access public --tag beta`.
+Never move npm latest to this beta. Test clean registry installations and tag
+both source repositories after successful publication.
